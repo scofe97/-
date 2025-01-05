@@ -4,12 +4,16 @@ import com.onion.backend.dto.EditArticleDto;
 import com.onion.backend.dto.WriteArticleDto;
 import com.onion.backend.entity.Article;
 import com.onion.backend.service.ArticleService;
+import com.onion.backend.service.CommentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequiredArgsConstructor
@@ -18,11 +22,7 @@ public class ArticleController {
     private final AuthenticationManager authenticationManager;
     private final ArticleService articleService;
 
-    @PostMapping("/{boardId}/articles")
-    public ResponseEntity<Article> writeArticle(@PathVariable Long boardId,
-                                                @RequestBody WriteArticleDto writeArticleDto) {
-        return ResponseEntity.ok(articleService.writeArticle(boardId, writeArticleDto));
-    }
+    private final CommentService commentService;
 
     @GetMapping("/{boardId}/articles")
     public ResponseEntity<List<Article>> getArticle(@PathVariable Long boardId,
@@ -37,6 +37,19 @@ public class ArticleController {
         return ResponseEntity.ok(articleService.firstGetArticle(boardId));
     }
 
+    @GetMapping("/{boardId}/articles/{articleId}")
+    public ResponseEntity<Article> getArticleWithComment(@PathVariable Long boardId, @PathVariable Long articleId) {
+        CompletableFuture<Article> article = commentService.getArticleWithCommentAsync(boardId, articleId);
+        return ResponseEntity.ok(article.resultNow());
+    }
+
+    @PostMapping("/{boardId}/articles")
+    public ResponseEntity<Article> writeArticle(@PathVariable Long boardId,
+                                                @RequestBody WriteArticleDto writeArticleDto) {
+        return ResponseEntity.ok(articleService.writeArticle(boardId, writeArticleDto));
+    }
+
+
     @PutMapping("/{boardId}/articles/{articleId}")
     public ResponseEntity<Article> editArticle(@PathVariable Long boardId, @PathVariable Long articleId,
                                                @RequestBody EditArticleDto editArticleDto) {
@@ -45,7 +58,8 @@ public class ArticleController {
 
     @DeleteMapping("/{boardId}/articles/{articleId}")
     public ResponseEntity<String> deleteArticle(@PathVariable Long boardId, @PathVariable Long articleId) {
-        boolean result = articleService.deleteArticle(boardId, articleId);
-        return ResponseEntity.ok("article is deleted: " + result);
+        articleService.deleteArticle(boardId, articleId);
+        return ResponseEntity.ok("article is deleted");
     }
+
 }

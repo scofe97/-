@@ -7,6 +7,21 @@ spring:
     username: onion-user
     password: onion1!
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5             # 최소 유지할 커넥션 수
+      maximum-pool-size: 20       # 최대 커넥션 수
+      connection-timeout: 20000   # 커넥션 요청 대기 시간 (20초)
+      pool-name: "HikariPool"     # 커넥션 풀 이름
+
+      connection-test-query: SELECT 1 # 검증 쿼리
+      validation-timeout: 5000        # 커넥션 검증 최대시간 (5초)
+
+      idle-timeout: 30000         # 유휴 커넥션을 유지할 시간 (30초)
+      max-lifetime: 1800000       # 커넥션의 최대 생존 시간 (30분)
+      initialization-fail-timeout: 1  # 초기화 실패 시 대기 시간 (-1이면 무한정 대기)
+
+      leak-detection-threshold: 2000  # 커넥션 누수 탐지 시간 (밀리초)
+
 
 
   jpa:
@@ -18,3 +33,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+  task:
+    execution:
+      pool:
+        core-size: 10       # 기본 스레드 수
+        max-size: 50        # 최대 스레드 수
+        queue-capacity: 100 # 대기열 크기
+        keep-alive: 60s     # 유휴 스레드 유지 시간 (초 단위)
+      thread-name-prefix: "AsyncExecutor-" # 스레드 이름 접두사

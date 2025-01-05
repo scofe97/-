@@ -12,6 +12,20 @@ services:
       MYSQL_PASSWORD: onion1!
     volumes:
       - db_data:/var/lib/mysql
+      - ./mysql_logs:/var/log/mysql
+    command:
+      --log-error=/var/log/mysql/error.log --slow_query_log=1 --slow_query_log_file=/var/log/mysql/slow.log --long_query_time=1
+
+  percona-toolkit:
+    image: percona/percona-toolkit:latest
+    container_name: percona-toolkit-container
+    depends_on:
+      - mysql-db
+    stdin_open: true
+    tty: true
+    entrypoint: /bin/bash
+    volumes:
+      - ./mysql_logs:/var/log/mysql
 
 volumes:
   db_data:

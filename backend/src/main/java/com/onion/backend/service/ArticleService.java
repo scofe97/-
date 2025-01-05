@@ -10,13 +10,14 @@ import com.onion.backend.exception.RateLimitException;
 import com.onion.backend.exception.ResourceNotFoundException;
 import com.onion.backend.repository.ArticleRepository;
 import com.onion.backend.repository.BoardRepository;
+import com.onion.backend.repository.CommentRepository;
 import com.onion.backend.repository.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -31,6 +32,21 @@ public class ArticleService {
     private final ArticleRepository articleRepository;
 
     private final UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public List<Article> firstGetArticle(Long boardId) {
+        return articleRepository.findTop10ByBoardIdOrderByCreatedDateDesc(boardId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Article> getOldArticle(Long boardId, Long articleId) {
+        return articleRepository.findTop10ByBoardIdAndArticleIdLessThanOrderByCreatedDateDesc(boardId, articleId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Article> getNewArticle(Long boardId, Long articleId) {
+        return articleRepository.findTop10ByBoardIdAndArticleIdGreaterThanOrderByCreatedDateDesc(boardId, articleId);
+    }
 
     @Transactional
     public Article writeArticle(Long boardId, WriteArticleDto dto) {
@@ -59,18 +75,6 @@ public class ArticleService {
 
         // 6. 게시글 저장 및 반환
         return articleRepository.save(article);
-    }
-
-    public List<Article> firstGetArticle(Long boardId) {
-        return articleRepository.findTop10ByBoardIdAndIsDeletedFalseOrderByCreatedDateDesc(boardId);
-    }
-
-    public List<Article> getOldArticle(Long boardId, Long articleId) {
-        return articleRepository.findTop10ByBoardIdAndIdLessThanAndIsDeletedFalseOrderByCreatedDateDesc(boardId, articleId);
-    }
-
-    public List<Article> getNewArticle(Long boardId, Long articleId) {
-        return articleRepository.findTop10ByBoardIdAndIdGreaterThanAndIsDeletedFalseOrderByCreatedDateDesc(boardId, articleId);
     }
 
     @Transactional
@@ -154,35 +158,29 @@ public class ArticleService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         Article latestArticle = articleRepository.findLatestArticleByAuthorUsernameOrderByCreatedDate(userDetails.getUsername());
+        if (latestArticle == null) {
+            return true;
+        }
         return this.isDifferenceMoreThanFiveMinutes(latestArticle.getCreatedDate());
     }
 
     private boolean isCanEditArticle() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-
         Article latestArticle = articleRepository.findLatestArticleByAuthorUsernameOrderByUpdatedDate(userDetails.getUsername());
+        if (latestArticle == null || latestArticle.getUpdatedDate() == null) {
+            return true;
+        }
         return this.isDifferenceMoreThanFiveMinutes(latestArticle.getUpdatedDate());
     }
 
-    /**
-     * 주어진 시간과 현재 시간의 차이가 5분 이상인지 확인하는 메서드
-     * @param localDateTime 비교할 시간
-     * @return 두 시간의 차이가 5분을 초과하면 true, 그렇지 않으면 false
-     */
     private boolean isDifferenceMoreThanFiveMinutes(LocalDateTime localDateTime) {
-        // 1. 현재 시간을 LocalDateTime 형식으로 가져옴
-        // Date 객체를 Instant 변환하고, 시스템 기본 시간대를 적용하여 LocalDateTime 변환
         LocalDateTime dateAsLocalDateTime = new Date().toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDateTime();
 
-        // 2. 두 시간(localDateTime, dateAsLocalDateTime)의 차이를 계산
-        // Duration 객체를 사용하여 두 LocalDateTime 차이를 나타냄
         Duration duration = Duration.between(localDateTime, dateAsLocalDateTime);
 
-        // 3. 두 시간의 차이가 5분을 초과하는지 확인
-        // Duration 분 단위로 변환한 후, 절대값으로 5분 초과 여부 판단
-        return Math.abs(duration.toMinutes()) > 5;
+        return Math.abs(duration.toSeconds()) > 5;
     }
 }
