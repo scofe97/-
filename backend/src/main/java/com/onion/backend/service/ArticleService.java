@@ -1,5 +1,7 @@
 package com.onion.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onion.backend.dto.EditArticleDto;
 import com.onion.backend.dto.WriteArticleDto;
 import com.onion.backend.entity.Article;
@@ -10,7 +12,6 @@ import com.onion.backend.exception.RateLimitException;
 import com.onion.backend.exception.ResourceNotFoundException;
 import com.onion.backend.repository.ArticleRepository;
 import com.onion.backend.repository.BoardRepository;
-import com.onion.backend.repository.CommentRepository;
 import com.onion.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -30,6 +31,8 @@ import java.util.List;
 public class ArticleService {
     private final BoardRepository boardRepository;
     private final ArticleRepository articleRepository;
+    private final ElasticSearchService elasticSearchService;
+    private final ObjectMapper objectMapper;
 
     private final UserRepository userRepository;
 
@@ -49,7 +52,7 @@ public class ArticleService {
     }
 
     @Transactional
-    public Article writeArticle(Long boardId, WriteArticleDto dto) {
+    public Article writeArticle(Long boardId, WriteArticleDto dto)  {
         // 1. 인증된 사용자 정보 가져오기
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
@@ -72,6 +75,9 @@ public class ArticleService {
         article.setAuthor(author); // 작성자 설정
         article.setTitle(dto.getTitle()); // 제목 설정
         article.setContent(dto.getContent()); // 내용 설정
+        articleRepository.save(article);
+
+        indexArticle(article);
 
         // 6. 게시글 저장 및 반환
         return articleRepository.save(article);
@@ -182,5 +188,14 @@ public class ArticleService {
         Duration duration = Duration.between(localDateTime, dateAsLocalDateTime);
 
         return Math.abs(duration.toSeconds()) > 5;
+    }
+
+    private void indexArticle(Article article) {
+        try {
+            String articleJson = objectMapper.writeValueAsString(article);
+            elasticSearchService.indexDocument("article", article.getId().toString(), articleJson).block();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to convert Article to JSON", e);
+        }
     }
 }

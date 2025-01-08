@@ -3,7 +3,7 @@ spring:
     name: backend
 
   datasource:
-    url: jdbc:mysql://localhost:3306/onion-db
+    url: jdbc:mysql://localhost:3306/onion-db?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
     username: onion-user
     password: onion1!
     driver-class-name: com.mysql.cj.jdbc.Driver

@@ -1,32 +1,74 @@
 services:
+  # MySQL 데이터베이스 설정
   mysql-db:
-    image: mysql:5.7
-    restart: always
-    platform: linux/amd64
+    image: mysql:5.7                      # MySQL 5.7 이미지 사용
+    restart: always                       # 컨테이너가 종료되면 자동으로 재시작
+    platform: linux/amd64                 # 플랫폼 설정 (M1/M2 Mac에서 호환성 문제 해결)
     ports:
-      - "3306:3306"
+      - "3306:3306"                       # MySQL 기본 포트 매핑
     environment:
-      MYSQL_ROOT_PASSWORD: onion1!
-      MYSQL_DATABASE: onion-db
-      MYSQL_USER: onion-user
-      MYSQL_PASSWORD: onion1!
+      MYSQL_ROOT_PASSWORD: onion1!        # MySQL root 사용자 비밀번호
+      MYSQL_DATABASE:      onion-db       # 초기 생성할 데이터베이스 이름
+      MYSQL_USER:          onion-user     # MySQL 사용자 이름
+      MYSQL_PASSWORD:      onion1!        # 사용자 비밀번호
     volumes:
-      - db_data:/var/lib/mysql
-      - ./mysql_logs:/var/log/mysql
-    command:
-      --log-error=/var/log/mysql/error.log --slow_query_log=1 --slow_query_log_file=/var/log/mysql/slow.log --long_query_time=1
+      - db_data:/var/lib/mysql            # MySQL 데이터 파일을 저장할 볼륨
+      - ./mysql_logs:/var/log/mysql       # MySQL 로그 파일 경로 매핑
+    command: >                            # MySQL 서버 실행 시 추가 설정
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --log-error=/var/log/mysql/error.log
+      --slow_query_log=1
+      --slow_query_log_file=/var/log/mysql/slow.log
+      --long_query_time=1
 
+  # Percona Toolkit 설정 (MySQL 성능 도구)
   percona-toolkit:
-    image: percona/percona-toolkit:latest
-    container_name: percona-toolkit-container
+    image: percona/percona-toolkit:latest # 최신 Percona Toolkit 이미지 사용
+    container_name: percona-toolkit-container # 컨테이너 이름 설정
     depends_on:
-      - mysql-db
-    stdin_open: true
-    tty: true
-    entrypoint: /bin/bash
+      - mysql-db                          # MySQL 컨테이너가 실행된 후 실행
+    stdin_open: true                      # 터미널 인터페이스 지원
+    tty: true                             # Bash 셸 사용 가능
+    entrypoint: /bin/bash                 # 컨테이너 시작 시 Bash 셸로 실행
     volumes:
-      - ./mysql_logs:/var/log/mysql
+      - ./mysql_logs:/var/log/mysql       # MySQL 로그와 공유하여 분석 가능
+
+  # Elasticsearch 설정
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0 # Elasticsearch 8.5 이미지 사용
+    container_name: elasticsearch           # 컨테이너 이름 설정
+    environment:
+      - node.name=elasticsearch             # 노드 이름 설정
+      - cluster-name=docker-cluster         # 클러스터 이름 설정
+      - discovery.type=single-node          # 단일 노드로 실행
+      - bootstrap.memory_lock=true          # 메모리 잠금 활성화 (성능 최적화)
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"    # Elasticsearch JVM 메모리 설정
+      - xpack.security.enabled=false        # 보안 설정 비활성화
+      - xpack.security.transport.ssl.enabled=false # 전송 계층 SSL 비활성화
+    ulimits:
+      memlock:
+        soft: 262144                        # 소프트 제한 (KB 단위)
+        hard: 262144                        # 하드 제한 (KB 단위)
+    command: >
+      sh -c "elasticsearch-plugin install analysis-nori && elasticsearch"
+    ports:
+      - "9200:9200"                         # Elasticsearch HTTP API
+    volumes:
+      - es_data:/usr/share/elasticsearch/data # Elasticsearch 데이터 파일 저장 경로
+
+  # Kibana 설정
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.5.0 # Kibana 8.5 이미지 사용
+    container_name: kibana                  # 컨테이너 이름 설정
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200 # Elasticsearch 주소
+    ports:
+      - "5601:5601"                         # Kibana 웹 인터페이스
+    depends_on:
+      - elasticsearch                       # Elasticsearch 컨테이너 실행 후 시작
 
 volumes:
   db_data:
+  es_data:
     driver: local

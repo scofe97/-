@@ -19,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ import java.util.concurrent.ExecutionException;
 @RequiredArgsConstructor
 public class CommentService {
 
+    private final TransactionTemplate transactionTemplate;
     private final BoardRepository boardRepository;
     private final ArticleRepository articleRepository;
 
@@ -37,7 +39,6 @@ public class CommentService {
 
     private final UserRepository userRepository;
 
-    @Transactional(readOnly = true)
     public CompletableFuture<Article> getArticleWithCommentAsync(Long boardId, Long articleId) {
         CompletableFuture<Article> articleFuture = this.getArticle(boardId, articleId);
         CompletableFuture<List<Comment>> commentsFuture = this.getComments(articleId);
@@ -57,17 +58,24 @@ public class CommentService {
     }
 
     @Async
-    protected CompletableFuture<Article> getArticle(Long boardId, Long articleId) {
+    @Transactional
+    public CompletableFuture<Article> getArticle(Long boardId, Long articleId) {
         boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResourceNotFoundException("Board not found"));
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Article not found"));
 
+        transactionTemplate.execute(status -> {
+            article.setViewCount(article.getViewCount() + 1);
+            articleRepository.save(article);
+            return null;
+        });
         return CompletableFuture.completedFuture(article);
     }
 
     @Async
-    protected CompletableFuture<List<Comment>> getComments(Long articleId) {
+    @Transactional
+    public CompletableFuture<List<Comment>> getComments(Long articleId) {
         return CompletableFuture.completedFuture(commentRepository.findByArticleId(articleId));
     }
 

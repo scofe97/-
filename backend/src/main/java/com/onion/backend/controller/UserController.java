@@ -59,7 +59,11 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public String login(@RequestParam String username, @RequestParam String password, HttpServletResponse response) throws AuthenticationException {
+    public String login(
+            @RequestParam(name = "username") String username
+            , @RequestParam(name = "password") String password
+            , HttpServletResponse response
+    ) throws AuthenticationException {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 

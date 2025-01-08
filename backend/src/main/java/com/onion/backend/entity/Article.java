@@ -52,6 +52,9 @@ public class Article {
     @LastModifiedDate
     private LocalDateTime updatedDate;
 
+    @Column(nullable = false)
+    private long viewCount;
+
     @PrePersist
     protected void onCreate() {
         this.createdDate = LocalDateTime.now();
