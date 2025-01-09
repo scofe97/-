@@ -1,5 +1,7 @@
 package com.onion.backend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onion.backend.dto.WriteCommentDto;
 import com.onion.backend.entity.Article;
 import com.onion.backend.entity.Board;
@@ -12,14 +14,13 @@ import com.onion.backend.repository.ArticleRepository;
 import com.onion.backend.repository.BoardRepository;
 import com.onion.backend.repository.CommentRepository;
 import com.onion.backend.repository.UserRepository;
-import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -31,17 +32,20 @@ import java.util.concurrent.ExecutionException;
 @RequiredArgsConstructor
 public class CommentService {
 
-    private final TransactionTemplate transactionTemplate;
     private final BoardRepository boardRepository;
     private final ArticleRepository articleRepository;
+    private final ElasticSearchService elasticSearchService;
 
     private final CommentRepository commentRepository;
 
     private final UserRepository userRepository;
 
+    private final ObjectMapper objectMapper;
+
+    @Transactional
     public CompletableFuture<Article> getArticleWithCommentAsync(Long boardId, Long articleId) {
-        CompletableFuture<Article> articleFuture = this.getArticle(boardId, articleId);
-        CompletableFuture<List<Comment>> commentsFuture = this.getComments(articleId);
+        CompletableFuture<Article> articleFuture = getArticle(boardId, articleId);
+        CompletableFuture<List<Comment>> commentsFuture = getComments(articleId);
 
         return CompletableFuture.allOf(articleFuture, commentsFuture)
                 .thenApply(voidResult -> {
@@ -51,30 +55,26 @@ public class CommentService {
                         article.setComments(comments);
                         return article;
                     } catch (InterruptedException | ExecutionException e) {
-                        e.printStackTrace();
                         return null;
                     }
                 });
     }
 
     @Async
-    @Transactional
     public CompletableFuture<Article> getArticle(Long boardId, Long articleId) {
         boardRepository.findById(boardId)
                 .orElseThrow(() -> new ResourceNotFoundException("Board not found"));
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Article not found"));
 
-        transactionTemplate.execute(status -> {
-            article.setViewCount(article.getViewCount() + 1);
-            articleRepository.save(article);
-            return null;
-        });
+        article.setViewCount(article.getViewCount() + 1);
+        articleRepository.save(article);
+        indexArticle(article);
+
         return CompletableFuture.completedFuture(article);
     }
 
     @Async
-    @Transactional
     public CompletableFuture<List<Comment>> getComments(Long articleId) {
         return CompletableFuture.completedFuture(commentRepository.findByArticleId(articleId));
     }
@@ -263,5 +263,14 @@ public class CommentService {
         LocalDateTime currentTime = LocalDateTime.now();
         Duration duration = Duration.between(dateTime, currentTime);
         return Math.abs(duration.toSeconds()) > 5;
+    }
+
+    private void indexArticle(Article article) {
+        try {
+            String articleJson = objectMapper.writeValueAsString(article);
+            elasticSearchService.indexDocument("article", article.getId().toString(), articleJson).block();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to convert Article to JSON", e);
+        }
     }
 }

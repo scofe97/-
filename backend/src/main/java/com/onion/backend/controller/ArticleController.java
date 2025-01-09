@@ -6,14 +6,12 @@ import com.onion.backend.entity.Article;
 import com.onion.backend.service.ArticleService;
 import com.onion.backend.service.CommentService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequiredArgsConstructor
@@ -33,6 +31,15 @@ public class ArticleController {
         }
         if (firstId != null) {
             return ResponseEntity.ok(articleService.getNewArticle(boardId, firstId));
+        }
+        return ResponseEntity.ok(articleService.firstGetArticle(boardId));
+    }
+
+    @GetMapping("/{boardId}/articles/search")
+    public ResponseEntity<List<Article>> getArticle(@PathVariable Long boardId,
+                                                    @RequestParam(required = true) String keyword) {
+        if (keyword != null) {
+            return ResponseEntity.ok(articleService.searchArticle(keyword));
         }
         return ResponseEntity.ok(articleService.firstGetArticle(boardId));
     }

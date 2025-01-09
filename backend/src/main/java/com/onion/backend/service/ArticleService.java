@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -49,6 +50,13 @@ public class ArticleService {
     @Transactional(readOnly = true)
     public List<Article> getNewArticle(Long boardId, Long articleId) {
         return articleRepository.findTop10ByBoardIdAndArticleIdGreaterThanOrderByCreatedDateDesc(boardId, articleId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Article> searchArticle(String keyword) {
+        List<Long> articleIdList = elasticSearchService.articleSearch(keyword).block();
+
+        return articleRepository.findAllById(Objects.requireNonNull(articleIdList));
     }
 
     @Transactional
@@ -120,6 +128,8 @@ public class ArticleService {
         article.setTitle(dto.title() != null ? dto.title() : article.getTitle());
         article.setContent(dto.content() != null ? dto.content() : article.getContent());
 
+        indexArticle(article);
+
         // 8. 변경된 게시글 저장 및 반환
         return articleRepository.save(article);
     }
@@ -153,6 +163,7 @@ public class ArticleService {
 
         // 7. 게시글 삭제 상태로 변경
         article.setIsDeleted(true);
+        indexArticle(article);
 
         // 8. 변경된 게시글 저장
         articleRepository.save(article);
